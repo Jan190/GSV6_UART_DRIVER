@@ -1,14 +1,11 @@
-
 #include "main.h"
-#include "dma.h"
 #include "eth.h"
 #include "usart.h"
 #include "usb_otg.h"
 #include "gpio.h"
+#include "GSV6_UART_DRIVER.h"
 
-
-//Arrya buffer veličine 12 elemenata za zaprimanje 8 bitnih podataka
-uint8_t UART2_rxBuffer[12] = {0};
+GSV6 device;
 
 
 
@@ -17,21 +14,33 @@ void SystemClock_Config(void);
 int main(void)
 {
 
+
   HAL_Init();
   SystemClock_Config();
   MX_GPIO_Init();
   MX_ETH_Init();
   MX_USART3_UART_Init();
-  MX_DMA_Init();
   MX_USART2_UART_Init();
   MX_USB_OTG_HS_USB_Init();
 
 
   //Inicijalizacija UART_Receivera
-  HAL_UART_Receive_DMA (&huart2, UART2_rxBuffer, 12);
+  //HAL_UART_Receive_DMA (&huart2, UART2_data, 1);
+
+  device.UARTHandle = &huart2;
+  device.force_N[0]=0.0f;
+  device.force_N[1]=0.0f;
+  device.force_N[2]=0.0f;
+  device.force_N[3]=0.0f;
+  device.force_N[4]=0.0f;
+  device.force_N[5]=0.0f;
 
   while (1)
   {
+	  uint8_t errNum =0;
+
+	  errNum = GSV6_CmdGetValue(&device);
+
 
   }
 
@@ -41,13 +50,8 @@ int main(void)
 //CAllback funkcija koja se pokreće kada se UART2_rxBuffer napuni do vrha
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-	//Transmita podatke koji se nalaze u UART2_rxBuffer
-    HAL_UART_Transmit(&huart2, UART2_rxBuffer, 12, 100);
 
-    //Ponovo inicijaliziramo UART_Receive_DMA zbog toga sto se napunio njegov buffer funkcija dosla do kraja
-    HAL_UART_Receive_DMA(&huart2, UART2_rxBuffer, 12);
 }
-
 
 
 
