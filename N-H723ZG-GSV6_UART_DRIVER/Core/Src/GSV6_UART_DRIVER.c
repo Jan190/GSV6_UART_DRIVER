@@ -8,7 +8,45 @@
 #include "GSV6_UART_DRIVER.h"
 
 
-uint8_t GSV6_Initialise(GSV6* device, UART_HandleTypeDef* UartHandle, uint8_t DataRate){
+
+/**
+  *
+  * @param  device je definirani structure u koji ce se upisati svi potrebni parametri za porektanja
+  * 		svih funkcija unutar funkcije
+  *
+  * @param  UartHandle je pointer na UART_HandleTypeDef structure u kojem su sadrzane informacije
+  * 		o konfiguraciji UART modula
+  *
+  * @param  DRate je varijabla kojom definiramo koliki cemo SPS (sample per second) imati u svojem ADC-u
+  * 		Moguci izbor SPS. Lijevo se nalazi idealna vrijednost, a desno stvarna vrijednost ADC-a:
+  *
+  * 										 ------------------
+  * 										|50Hz	| 49.9002Hz|
+  * 										 ------------------
+  * 										|100Hz	| 100.402Hz|
+  * 										 ------------------
+  * 										|150Hz	| 148.81Hz |
+  * 										 ------------------
+  * 										|300Hz	| 297.619Hz|
+  * 										 ------------------
+  * 										|500Hz	| 490.196Hz|
+  * 										 ------------------
+  * 										|600Hz	| 595.238Hz|
+  * 										 ------------------
+  * 										|700Hz	| 694.444Hz|
+  * 										 ------------------
+  * 										|750Hz	| 757.576Hz|
+  * 										 ------------------
+  *
+  * Zbog samog CLK mikrokontrolera koji radi obradu podataka nije moguce izabrati cijeli broj nego decimalne kako je prikazno.
+  * U trazeni parametar upisuje se cijeli broj (npr. 50Hz)
+  *
+  * @retval Broj errora (errNum)
+  *
+  */
+
+
+uint8_t GSV6_Initialise(GSV6* device, UART_HandleTypeDef* UartHandle, uint16_t DRate){
 
 	/* Definiramo struct parametre*/
 	device->UARTHandle = UartHandle;
@@ -20,23 +58,85 @@ uint8_t GSV6_Initialise(GSV6* device, UART_HandleTypeDef* UartHandle, uint8_t Da
 	device->force_N[4]=0.0f;
 	device->force_N[5]=0.0f;
 
-	/* Varijable za spremanje broja errora (vracaju se nakon sto se izvrti cijela funkcija)*/
+	/*Definiranu vrijednost DataRate potrebno je pospremiti kao najblizu mogucu vrijednost SPS Rate sto je dano u tablici iznad*/
+
+	switch (DRate){
+	case 50:
+		device->DataRate[0] = 0x42;
+		device->DataRate[1] = 0x47;
+		device->DataRate[2] = 0x99;
+		device->DataRate[3] = 0xCE;
+		break ;
+	case 100:
+		device->DataRate[0] = 0x42;
+		device->DataRate[1] = 0xC8;
+		device->DataRate[2] = 0xCD;
+		device->DataRate[3] = 0xD3;
+		break ;
+	case 150:
+		device->DataRate[0] = 0x43;
+		device->DataRate[1] = 0x14;
+		device->DataRate[2] = 0xCF;
+		device->DataRate[3] = 0x5C;
+		break ;
+	case 300:
+		device->DataRate[0] = 0x43;
+		device->DataRate[1] = 0x94;
+		device->DataRate[2] = 0xCF;
+		device->DataRate[3] = 0x3B;
+		break ;
+	case 500:
+		device->DataRate[0] = 0x43;
+		device->DataRate[1] = 0xF5;
+		device->DataRate[2] = 0x19;
+		device->DataRate[3] = 0x17;
+		break ;
+	case 600:
+		device->DataRate[0] = 0x44;
+		device->DataRate[1] = 0x14;
+		device->DataRate[2] = 0xCF;
+		device->DataRate[3] = 0x3B;
+		break ;
+	case 700:
+		device->DataRate[0] = 0x44;
+		device->DataRate[1] = 0x2D;
+		device->DataRate[2] = 0x9C;
+		device->DataRate[3] = 0x6A;
+		break ;
+	case 750:
+		device->DataRate[0] = 0x44;
+		device->DataRate[1] = 0x3D;
+		device->DataRate[2] = 0x64;
+		device->DataRate[3] = 0xDD;
+		break ;
+
+	/*U slucaju zadavanja krive vrijednosti DataRate postavlja se vrijednost od 750Hz*/
+	default:
+		device->DataRate[0] = 0x44;
+		device->DataRate[1] = 0x3D;
+		device->DataRate[2] = 0x64;
+		device->DataRate[3] = 0xDD;
+		break ;
+	}
+
+	/* Varijable za spremanje broja errora (vracaju se nakon sto se izvrsi cijela funkcija)*/
 	uint8_t errNum = 0;
 	HAL_StatusTypeDef status;
 
-	/*Zaustavljanje slanja podataka s uređaja*/
+	/********		ZAUSTAVLJANJE SLANJA PORUKA		********/
+	status = GSV6_CmdStopTransmission(device);
+	errNum += (status != HAL_OK);
+	status = 0;
 
+	/********		POSTAVLJANJE DATARATE		*******/
+	status = GSV6_CmdWriteDataRate(device);
+	errNum += (status != HAL_OK);
+	status = 0;
 
-
-	/*Postavljanje DataRate-a*/
-
-
-
-	/*
-	 * Postavljanje vrijednosti tara na vrijednost ulaza,
-	 * kako bi izlazna vrijednost senzora bila nula
-	 */
-
+	/********		TARIRANJE(NULIRANJE) SVIH KANALA		********/
+	status = GSV6_CmdSetZero(device);
+	errNum += (status != HAL_OK);
+	status = 0;
 
 	return errNum;
 }
@@ -136,11 +236,16 @@ uint8_t GSV6_CmdGetValue(GSV6* device){
 	uint8_t MsgRec [28];
 	uint32_t ForceDataRaw [6];
 	uint8_t errNum =0;
+	HAL_StatusTypeDef status;
 
 
-	HAL_StatusTypeDef status = GSV6_CmdSend(device, CmdMsg, 4);
+	status = GSV6_CmdSend(device, CmdMsg, 4);
+	errNum += (status != HAL_OK);
+	status = 0;
 
-	HAL_StatusTypeDef status1 = GSV6_CmdRead(device, MsgRec, 28);
+	status = GSV6_CmdRead(device, MsgRec, 28);
+	errNum += (status != HAL_OK);
+	status = 0;
 
 	/* Očitavanje zaprimljene poruke i provjera je li stigla cijela poruka prije njeznog ocitanja*/
 	if(MsgRec[0] == 0xAA && MsgRec[27] == 0x85){
@@ -158,7 +263,7 @@ uint8_t GSV6_CmdGetValue(GSV6* device){
 
 		/*
 		 * Pomocu funkcije memcpy kopiramo memoriju velicine float(32bita)
-		 *  s adrese ForceDataRaw u adresu od device na mjesto force_N[0]
+		 *  s adrese ForceDataRaw u adresu od device na mjesto force_N[0]..
 		 *  */
 		memcpy(&device->force_N[0], &ForceDataRaw[0], sizeof(float));
 		memcpy(&device->force_N[1], &ForceDataRaw[1], sizeof(float));
@@ -169,6 +274,25 @@ uint8_t GSV6_CmdGetValue(GSV6* device){
 
 	}
 	return errNum;
+}
+
+HAL_StatusTypeDef GSV6_CmdWriteDataRate(GSV6* device){
+
+	/*
+		 * Definiramo poruku koju cemo poslati
+		 * 1.Byte 	 = Prefix za zapocinanje poruke
+		 * 2.Byte 	 = prva cetri bita definiraju koliko bytova podataka saljemo u ovom slucaju 4 (5=0100)
+		 * 			   druga cetri bita definiraju da je u pitanju request putem serijske komunikacije (9 = 1001)
+		 * 3.Byte 	 = Definiramo komandu koju cemo korisiti u poruci u ovom slucaju WriteDataRate
+		 * 4-7.Byte  = Definiramo koju vrijednost DataRate cemo staviti na definirani ADC convertor
+		 * 8.Byte    = Suffix za zavrsavanje poruke
+		 */
+	uint8_t CmdMsg [8] = {GSV6_MSG_PREFIX, 0x94, GSV6_CMD_WRITEDATARATE, device->DataRate[0], device->DataRate[1], device->DataRate[2], device->DataRate[3], GSV_MSG_SUFFIX};
+
+	HAL_StatusTypeDef status = GSV6_CmdSend(device, CmdMsg, 8);
+
+	return status;
+
 }
 
 /*

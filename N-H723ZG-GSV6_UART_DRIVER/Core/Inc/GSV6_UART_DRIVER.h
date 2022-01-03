@@ -8,7 +8,7 @@
 #ifndef INC_GSV6_UART_DRIVER_H_
 #define INC_GSV6_UART_DRIVER_H_
 
-#include "stm32h7xx_hal.h" /* Potrebno za UART */
+#include "stm32h7xx_hal.h" /* Potrebno header za UART za zadanu familiju STM32 mikorokontrolera*/
 #include <string.h>
 /*
  * DEFINICIJA PROTOKOLA (DATASHEET STRANICA 9,10)
@@ -89,10 +89,10 @@ typedef struct{
 	UART_HandleTypeDef* UARTHandle;
 
 	/*Varijabla za definiranje data rate*/
-	float DataRate;
+	uint8_t DataRate[4];
 
 	/* Očitane sile s kanala (kanal1, kanal2, kanal3, kanal4, kanal5, kanal5) u N*/
-	float force_N[6];
+	uint8_t force_N[6];
 
 } GSV6;
 
@@ -100,10 +100,10 @@ typedef struct{
    * INICIJALIZACIJA
    */
 
-uint8_t GSV6_Initialise(GSV6* device, UART_HandleTypeDef* UARTHandle, uint8_t DataRate); /*Potreban struct definiran iznad i UART handle*/
+uint8_t GSV6_Initialise(GSV6* device, UART_HandleTypeDef* UARTHandle, uint16_t DRate); /*Potreban struct definiran iznad i UART handle*/
 
   /*
-   * AKVIZICIJA PODATAKA I SLANJE NAREDBI
+   * HIGH-LEVEL FUNKCIJE : AKVIZICIJA PODATAKA I SLANJE NAREDBI
    */
 
 HAL_StatusTypeDef GSV6_CmdReadZero();
